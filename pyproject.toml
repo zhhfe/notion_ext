@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "notion-ext"
+version = "0.1.0"
+description = "Notion 日报扩展工具：查询 Notion + macOS 提醒事项，发送钉钉日报"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.28",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+notion-ext = "notion_ext.__main__:main"

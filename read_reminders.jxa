@@ -1,0 +1,50 @@
+/**
+ * JXA (JavaScript for Automation) 脚本
+ * 用「集合引用」批量取属性，避免逐条访问导致卡死
+ * 执行: osascript -l JavaScript read_reminders.jxa
+ */
+function run() {
+  var Reminders = Application('Reminders');
+  Reminders.includeStandardAdditions = true;
+
+  var result = { lists: [] };
+  var lists = Reminders.lists();
+
+  for (var i = 0; i < lists.length; i++) {
+    var list = lists[i];
+    var listName = list.name();
+    var rems = list.reminders;
+    var names = rems.name();
+    var bodies = rems.body ? rems.body() : [];
+    var dueDates = rems.dueDate ? rems.dueDate() : [];
+    var completeds = rems.completed ? rems.completed() : [];
+    var priorities = rems.priority ? rems.priority() : [];
+
+    var n = names.length;
+    var items = [];
+    for (var j = 0; j < n; j++) {
+      var due = dueDates[j];
+      if (due && typeof due === 'object' && typeof due.toISOString === 'function') {
+        due = due.toISOString();
+      } else if (due) {
+        due = String(due);
+      } else {
+        due = null;
+      }
+      items.push({
+        name: names[j] || '',
+        body: (bodies[j] != null ? bodies[j] : '') || '',
+        dueDate: due,
+        completed: Boolean(completeds[j]),
+        priority: Number(priorities[j]) || 0
+      });
+    }
+
+    result.lists.push({
+      name: listName,
+      reminders: items
+    });
+  }
+
+  return JSON.stringify(result, null, 2);
+}
