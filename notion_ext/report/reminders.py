@@ -7,8 +7,8 @@ import logging
 import subprocess
 import sys
 
-from .config import JXA_SCRIPT_PATH
-from .models import Reminder
+from ..config import JXA_SCRIPT_PATH
+from ..models import Reminder
 
 logger = logging.getLogger(__name__)
 

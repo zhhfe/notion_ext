@@ -1,9 +1,8 @@
 #!/bin/bash
-# 供 crontab 调用：设置代理等环境变量后执行 python -m notion_ext
+# 启动 notion_ext 服务（HTTP + 定时任务），设置代理等环境变量
 
 cd "$(dirname "$0")"
 
-export TZ="${TZ:-Asia/Shanghai}"
 export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:$PATH"
 export HTTPS_PROXY="${HTTPS_PROXY:-http://127.0.0.1:7890}"
 export HTTP_PROXY="${HTTP_PROXY:-http://127.0.0.1:7890}"

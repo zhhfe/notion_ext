@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from .models import Reminder, TodayTask, WeekTask
+from ..models import Reminder, TodayTask, WeekTask
 
 _WEEKDAY_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 _SECTION_SEP = "\n--------------------\n"

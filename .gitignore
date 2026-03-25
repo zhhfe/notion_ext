@@ -1,6 +1,8 @@
 .env
-cron.log
+env.sh
+*.log
 __pycache__/
 *.pyc
 .venv/
 .idea/
+/com.zhouhuaifeng.notion-ext.plist

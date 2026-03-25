@@ -26,3 +26,11 @@ class WeekTask:
 class Reminder:
     name: str
     completed: bool
+
+
+@dataclass
+class CalendarEvent:
+    uid: str
+    summary: str
+    start: str
+    end: str

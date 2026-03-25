@@ -11,10 +11,26 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 load_dotenv(PROJECT_ROOT / ".env")
 
+# ── Notion ────────────────────────────────────────────────
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 NOTION_TODAY_DB_ID = os.environ.get("NOTION_TODAY_DB_ID", "")
 NOTION_WEEK_DB_ID = os.environ.get("NOTION_WEEK_DB_ID", "")
+NOTION_DEFAULT_PAGE_ID = os.environ.get("NOTION_DEFAULT_PAGE_ID", "")
 NOTION_API_VERSION = "2022-06-28"
 
-CRON_LOG_PATH = PROJECT_ROOT / "cron.log"
+# ── Calendar sync ─────────────────────────────────────────
+_ics_raw = os.environ.get("ICS_OUTPUT_PATH", "notion_ext/calendar")
+ICS_OUTPUT_PATH = str(Path(_ics_raw) if Path(_ics_raw).is_absolute() else PROJECT_ROOT / _ics_raw)
+ICS_FILE_NAME = os.environ.get("ICS_FILE_NAME", "calendar.ics")
+ICS_AUTO_PUSH_GIT = os.environ.get("ICS_AUTO_PUSH_GIT", "").lower() in ("true", "1", "yes")
+ICS_GIT_COMMIT_MSG = os.environ.get("ICS_GIT_COMMIT_MSG", "Update calendar from Notion")
+CALENDAR_SERVER_PORT = int(os.environ.get("CALENDAR_SERVER_PORT", "33189"))
+
+# ── Schedule ──────────────────────────────────────────────
+REPORT_CRON_MINUTE = os.environ.get("REPORT_CRON_MINUTE", "0,30")
+REPORT_CRON_HOUR = os.environ.get("REPORT_CRON_HOUR", "10-22")
+TZ = os.environ.get("TZ", "Asia/Shanghai")
+
+# ── Paths ─────────────────────────────────────────────────
+LOG_PATH = PROJECT_ROOT / "notion_ext.log"
 JXA_SCRIPT_PATH = PROJECT_ROOT / "read_reminders.jxa"
