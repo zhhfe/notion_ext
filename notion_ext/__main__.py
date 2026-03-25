@@ -18,6 +18,22 @@ from . import config
 logger = logging.getLogger("notion_ext")
 
 
+class _StreamToLogger:
+    """将 write() 调用转发到 logging，用于重定向 stdout/stderr。"""
+
+    def __init__(self, log: logging.Logger, level: int) -> None:
+        self._log = log
+        self._level = level
+        self._buf = ""
+
+    def write(self, msg: str) -> None:
+        if msg and msg.strip():
+            self._log.log(self._level, msg.rstrip())
+
+    def flush(self) -> None:
+        pass
+
+
 def _setup_logging() -> None:
     root = logging.getLogger("notion_ext")
     root.setLevel(logging.DEBUG)
@@ -27,7 +43,9 @@ def _setup_logging() -> None:
         datefmt="%Y/%m/%d %H:%M:%S",
     )
 
-    console = logging.StreamHandler(sys.stderr)
+    real_stderr = sys.stderr
+
+    console = logging.StreamHandler(real_stderr)
     console.setLevel(logging.INFO)
     console.setFormatter(fmt)
     root.addHandler(console)
@@ -36,6 +54,9 @@ def _setup_logging() -> None:
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(fmt)
     root.addHandler(file_handler)
+
+    sys.stdout = _StreamToLogger(logging.getLogger("notion_ext.stdout"), logging.INFO)
+    sys.stderr = _StreamToLogger(logging.getLogger("notion_ext.stderr"), logging.ERROR)
 
 
 def _run_report_safe() -> None:

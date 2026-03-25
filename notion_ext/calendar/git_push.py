@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_PUSH_MAX_ATTEMPTS = 3
 
 
 def save_and_push(
@@ -29,8 +32,17 @@ def save_and_push(
         if "nothing to commit" in output or "no changes added" in output:
             logger.info("没有需要提交的变更")
             return
-        _run_git(output_dir, "push")
-        logger.info("Git push 成功")
+
+        for attempt in range(1, _PUSH_MAX_ATTEMPTS + 1):
+            try:
+                _run_git(output_dir, "push")
+                logger.info("Git push 成功")
+                return
+            except RuntimeError as exc:
+                logger.warning("Git push 失败 (attempt %d/%d): %s", attempt, _PUSH_MAX_ATTEMPTS, exc)
+                if attempt < _PUSH_MAX_ATTEMPTS:
+                    time.sleep(attempt)
+        logger.error("Git push 重试全部失败")
     except RuntimeError as exc:
         logger.error("Git 操作失败: %s", exc)
 

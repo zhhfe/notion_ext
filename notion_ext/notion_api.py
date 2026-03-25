@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 _API_BASE = "https://api.notion.com/v1"
 _MAX_ATTEMPTS = 5
-_BASE_DELAY = 1.5
 _TIMEOUT = 90
 
 
@@ -84,7 +83,7 @@ def query_database(db_id: str, body: dict) -> list[dict]:
         except requests.RequestException as exc:
             logger.error("Notion 网络错误 (attempt %d/%d): %s", attempt, _MAX_ATTEMPTS, exc)
             if attempt < _MAX_ATTEMPTS and _is_retriable(exc):
-                time.sleep(_BASE_DELAY * (2 ** (attempt - 1)))
+                time.sleep(attempt)
                 continue
             return []
     return []
@@ -109,7 +108,7 @@ def update_page(page_id: str, properties: dict) -> bool:
         except requests.RequestException as exc:
             logger.error("Notion 更新页面 网络错误 (attempt %d/%d): %s", attempt, _MAX_ATTEMPTS, exc)
             if attempt < _MAX_ATTEMPTS and _is_retriable(exc):
-                time.sleep(_BASE_DELAY * (2 ** (attempt - 1)))
+                time.sleep(attempt)
                 continue
             return False
     return False
