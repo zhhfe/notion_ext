@@ -49,6 +49,12 @@ def _progress_pct(done: int, total: int) -> int:
     return round(done / total * 100) if total > 0 else 0
 
 
+def _progress_bar(done: int, total: int, width: int = 10) -> str:
+    pct = _progress_pct(done, total)
+    filled = round(width * pct / 100)
+    return f"({'▮' * filled}{'▯' * (width - filled)} {pct}%)"
+
+
 def _start_ts(iso: Optional[str]) -> float:
     """ISO 时间 → 时间戳，解析失败返回 inf（排到最后）。"""
     if not iso:
@@ -67,10 +73,10 @@ def _sort_incomplete_first(items, *, is_done, sort_key):
 
 def format_today(items: list[TodayTask]) -> str:
     if not items:
-        return "今日 todo，进度【0%】：\n暂无"
+        return f"今日 todo {_progress_bar(0, 0)}：\n暂无"
 
     done_count = sum(1 for it in items if it.done)
-    pct = _progress_pct(done_count, len(items))
+    bar = _progress_bar(done_count, len(items))
 
     sorted_items = _sort_incomplete_first(
         items,
@@ -91,15 +97,15 @@ def format_today(items: list[TodayTask]) -> str:
             time_str = ""
         lines.append(f"{mark} {it.name}.{time_str}")
 
-    return f"今日 todo，进度【{pct}%】：\n" + "\n".join(lines)
+    return f"今日 todo {bar}：\n" + "\n".join(lines)
 
 
 def format_week_tasks(items: list[WeekTask]) -> str:
     if not items:
-        return "本周 todo，进度【0%】：\n暂无"
+        return f"本周 todo {_progress_bar(0, 0)}：\n暂无"
 
     done_count = sum(1 for it in items if it.done)
-    pct = _progress_pct(done_count, len(items))
+    bar = _progress_bar(done_count, len(items))
 
     sorted_items = _sort_incomplete_first(
         items,
@@ -113,7 +119,7 @@ def format_week_tasks(items: list[WeekTask]) -> str:
         range_str = _weekday_range(it.start_date, it.end_date) if it.start_date else ""
         lines.append(f"{mark} {it.task_name}{range_str}")
 
-    return f"本周 todo，进度【{pct}%】：\n" + "\n".join(lines)
+    return f"本周 todo {bar}：\n" + "\n".join(lines)
 
 
 def format_reminders(reminders: list[Reminder]) -> str:
