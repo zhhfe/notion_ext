@@ -47,7 +47,9 @@ launchctl unload ~/Library/LaunchAgents/com.notion-ext.plist  # 卸载
 launchctl list | grep notion-ext               # 查看状态
 ```
 
-日志文件位于项目目录下：`launchd_stdout.log`、`launchd_stderr.log`。
+```bash
+launchctl kickstart -k gui/$(id -u)/com.zhouhuaifeng.notion-ext
+````
 
 ## 项目结构
 

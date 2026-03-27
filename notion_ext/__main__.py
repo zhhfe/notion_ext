@@ -68,28 +68,61 @@ def _run_report_safe() -> None:
         logger.error("定时日报执行失败: %s", exc, exc_info=True)
 
 
+def _clean_log_file() -> None:
+    """清空日志文件，保留文件句柄。"""
+    try:
+        log_path = config.LOG_PATH
+        if log_path.exists():
+            log_path.write_text("", encoding="utf-8")
+            logger.info("日志文件已清理: %s", log_path)
+    except Exception as exc:
+        logger.error("清理日志文件失败: %s", exc, exc_info=True)
+
+
 def _serve() -> None:
     """启动 HTTP 服务 + 定时任务，常驻运行。"""
+    from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED, EVENT_JOB_MISSED
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger
 
     from .calendar.notion_updater import update_default_page_time
     from .calendar.server import run_server
 
-    # 定时任务
+    misfire_grace = 3600
+
     scheduler = BackgroundScheduler(timezone=config.TZ)
     scheduler.add_job(
         _run_report_safe,
         CronTrigger(minute=config.REPORT_CRON_MINUTE, hour=config.REPORT_CRON_HOUR),
         id="daily_report",
         name="钉钉日报",
+        misfire_grace_time=misfire_grace,
     )
+    scheduler.add_job(
+        _clean_log_file,
+        CronTrigger(hour=3, minute=0),
+        id="clean_log",
+        name="清理日志文件",
+        misfire_grace_time=misfire_grace,
+    )
+
+    def _on_scheduler_event(event):
+        if hasattr(event, "job_id"):
+            if event.code == EVENT_JOB_MISSED:
+                logger.warning("定时任务错过执行: %s", event.job_id)
+            elif event.code == EVENT_JOB_ERROR:
+                logger.error("定时任务执行异常: %s", event.job_id, exc_info=event.exception)
+            elif event.code == EVENT_JOB_EXECUTED:
+                logger.debug("定时任务完成: %s", event.job_id)
+
+    scheduler.add_listener(_on_scheduler_event, EVENT_JOB_EXECUTED | EVENT_JOB_MISSED | EVENT_JOB_ERROR)
     scheduler.start()
     logger.info(
-        "定时任务已注册: 日报 (hour=%s, minute=%s, tz=%s)",
+        "定时任务已注册: 日报 (hour=%s, minute=%s, tz=%s), 日志清理 (03:00), misfire_grace=%ds",
         config.REPORT_CRON_HOUR,
         config.REPORT_CRON_MINUTE,
         config.TZ,
+        misfire_grace,
     )
 
     # 启动时更新默认页面时间
