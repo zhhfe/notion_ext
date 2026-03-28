@@ -11,6 +11,9 @@ Notion 扩展工具，一个常驻服务：
 cd /path/to/notion_ext
 pip install -r requirements.txt
 cp .env.example .env   # 编辑填入你的配置
+
+# macOS：编译提醒事项读取工具（EventKit，不会在程序坞拉起「提醒事项」应用）
+(cd read_reminders_cli && swift build -c release)
 ```
 
 ## 使用
@@ -59,7 +62,7 @@ notion_ext/
 ├── pyproject.toml             # 项目元数据 + 依赖
 ├── requirements.txt
 ├── run_cron.sh                # 启动脚本（设置代理等环境变量）
-├── read_reminders.jxa         # macOS 提醒事项 JXA 脚本
+├── read_reminders_cli/        # macOS 提醒事项 Swift CLI（EventKit）
 └── notion_ext/                # Python 包
     ├── __main__.py            # 入口：启动 HTTP 服务 + 定时任务
     ├── config.py              # 共享配置
@@ -95,5 +98,6 @@ notion_ext/
 | `REPORT_CRON_MINUTE` | 日报执行分钟 | `0,30` |
 | `REPORT_CRON_HOUR` | 日报执行小时 | `10-22` |
 | `TZ` | 时区 | `Asia/Shanghai` |
+| `NOTION_EXT_REMINDERS_CLI` | 提醒事项 CLI 可执行文件路径（可选，默认用 `read_reminders_cli` 编译产物） | |
 | `ICS_OUTPUT_PATH` | ICS 文件保存目录 | |
 | `ICS_AUTO_PUSH_GIT` | 自动 git push | `false` |

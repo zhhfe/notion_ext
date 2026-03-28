@@ -6,3 +6,4 @@ __pycache__/
 .venv/
 .idea/
 /com.zhouhuaifeng.notion-ext.plist
+read_reminders_cli/.build/

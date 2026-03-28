@@ -33,4 +33,23 @@ TZ = os.environ.get("TZ", "Asia/Shanghai")
 
 # ── Paths ─────────────────────────────────────────────────
 LOG_PATH = PROJECT_ROOT / "notion_ext.log"
-JXA_SCRIPT_PATH = PROJECT_ROOT / "read_reminders.jxa"
+
+
+def _resolve_reminders_cli_path() -> Path:
+    """EventKit 命令行工具路径；可用环境变量 NOTION_EXT_REMINDERS_CLI 覆盖。"""
+    override = os.environ.get("NOTION_EXT_REMINDERS_CLI")
+    if override:
+        return Path(override).expanduser()
+    root = PROJECT_ROOT / "read_reminders_cli"
+    for rel in (
+        ".build/release/read_reminders_cli",
+        ".build/arm64-apple-macosx/release/read_reminders_cli",
+        ".build/x86_64-apple-macosx/release/read_reminders_cli",
+    ):
+        p = root / rel
+        if p.is_file():
+            return p
+    return root / ".build" / "release" / "read_reminders_cli"
+
+
+REMINDERS_CLI_PATH = _resolve_reminders_cli_path()
