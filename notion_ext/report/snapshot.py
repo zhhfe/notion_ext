@@ -56,8 +56,8 @@ def _weekday_range(start_ymd: str | None, end_ymd: str | None) -> str:
     if not start and not end:
         return ""
     if not end or start == end:
-        return f" ({start})"
-    return f" ({start}-{end})"
+        return start
+    return f"{start} - {end}"
 
 
 def _progress_pct(done: int, total: int) -> int:

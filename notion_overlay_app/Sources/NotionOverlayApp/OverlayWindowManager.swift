@@ -1,4 +1,5 @@
 import AppKit
+import Foundation
 import SwiftUI
 
 final class OverlayFloatingWindow: NSWindow {
@@ -14,6 +15,10 @@ final class OverlayWindowManager: NSObject, NSWindowDelegate {
 
     private(set) var window: OverlayFloatingWindow?
     private let settings: SettingsStore
+    private var isUserAdjustingWindow = false
+    private var isRestoringFrame = false
+    private var moveIdleResetTask: DispatchWorkItem?
+    private var stableFrame: NSRect?
 
     init(settings: SettingsStore) {
         self.settings = settings
@@ -48,6 +53,7 @@ final class OverlayWindowManager: NSObject, NSWindowDelegate {
             }
 
             ensureWindowIsVisible(overlayWindow)
+            stableFrame = overlayWindow.frame
 
             overlayWindow.contentView = NSHostingView(rootView: rootView)
             window = overlayWindow
@@ -64,6 +70,7 @@ final class OverlayWindowManager: NSObject, NSWindowDelegate {
         guard let window else { return }
         AppLogger.shared.log("OverlayWindow show requested")
         ensureWindowIsVisible(window)
+        stableFrame = window.frame
         NSApp.activate(ignoringOtherApps: settings.showOnAllSpaces)
         if settings.showOnAllSpaces {
             window.orderFrontRegardless()
@@ -116,13 +123,6 @@ final class OverlayWindowManager: NSObject, NSWindowDelegate {
         if settings.rememberWindowFrame {
             window.setFrameAutosaveName(FrameStore.autosaveName)
         }
-        if window.isVisible {
-            if settings.showOnAllSpaces {
-                window.orderFrontRegardless()
-            } else {
-                window.orderFront(nil)
-            }
-        }
     }
 
     func isVisible() -> Bool {
@@ -130,10 +130,17 @@ final class OverlayWindowManager: NSObject, NSWindowDelegate {
     }
 
     func windowDidMove(_ notification: Notification) {
+        if !isRestoringFrame {
+            stableFrame = window?.frame
+        }
         persistFrameIfNeeded()
+        scheduleMoveIdleReset()
     }
 
     func windowDidResize(_ notification: Notification) {
+        if !isRestoringFrame {
+            stableFrame = window?.frame
+        }
         persistFrameIfNeeded()
     }
 
@@ -143,6 +150,53 @@ final class OverlayWindowManager: NSObject, NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
         applySettings()
+    }
+
+    func windowWillMove(_ notification: Notification) {
+        isUserAdjustingWindow = true
+        moveIdleResetTask?.cancel()
+    }
+
+    func windowWillStartLiveResize(_ notification: Notification) {
+        isUserAdjustingWindow = true
+        moveIdleResetTask?.cancel()
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        isUserAdjustingWindow = false
+        stableFrame = window?.frame
+        persistFrameIfNeeded()
+    }
+
+    func windowDidChangeScreen(_ notification: Notification) {
+        guard let window else { return }
+        guard !isRestoringFrame else { return }
+
+        if isUserAdjustingWindow {
+            stableFrame = window.frame
+            return
+        }
+
+        guard let previousFrame = stableFrame else {
+            stableFrame = window.frame
+            return
+        }
+
+        let drift = hypot(
+            window.frame.origin.x - previousFrame.origin.x,
+            window.frame.origin.y - previousFrame.origin.y
+        )
+        guard drift > 8 else {
+            stableFrame = window.frame
+            return
+        }
+
+        isRestoringFrame = true
+        window.setFrame(previousFrame, display: true, animate: false)
+        isRestoringFrame = false
+        AppLogger.shared.log(
+            "OverlayWindow detected unexpected screen jump, restored frame to x=\(Int(previousFrame.origin.x)) y=\(Int(previousFrame.origin.y))"
+        )
     }
 
     private func persistFrameIfNeeded() {
@@ -170,5 +224,14 @@ final class OverlayWindowManager: NSObject, NSWindowDelegate {
                 window.center()
             }
         }
+    }
+
+    private func scheduleMoveIdleReset() {
+        moveIdleResetTask?.cancel()
+        let task = DispatchWorkItem { [weak self] in
+            self?.isUserAdjustingWindow = false
+        }
+        moveIdleResetTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: task)
     }
 }

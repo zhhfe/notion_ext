@@ -90,6 +90,8 @@ $ICON_PLIST
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSRemindersUsageDescription</key>
+    <string>用于读取 macOS 提醒事项并展示到悬浮日报窗口。</string>
 </dict>
 </plist>
 EOF

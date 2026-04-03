@@ -15,6 +15,7 @@ usage() {
     echo "  install   链 plist 到 ~/Library/LaunchAgents 并 load（已加载则先 unload）"
     echo "  reload    unload 再 load（改 plist 后用这个）"
     echo "  unload    从 launchd 卸载（不删 LaunchAgents 里的链接）"
+    echo "  disable   彻底停用：bootout + disable，并删除 LaunchAgents 链接（不再自动拉起）"
     echo "  kickstart 强制重启任务（等价于 README 里的 kickstart）"
     echo "  status    launchctl list 里筛 notion-ext"
     echo ""
@@ -31,6 +32,7 @@ ensure_plist() {
 cmd_install() {
     ensure_plist
     mkdir -p "${HOME}/Library/LaunchAgents"
+    launchctl enable "${GUI_DOMAIN}/${LABEL}" 2>/dev/null || true
     launchctl unload "${PLIST_DST}" 2>/dev/null || true
     ln -sf "${PLIST_SRC}" "${PLIST_DST}"
     launchctl load "${PLIST_DST}"
@@ -44,6 +46,7 @@ cmd_reload() {
         echo "未找到 ${PLIST_DST}，请先执行: $0 install" >&2
         exit 1
     fi
+    launchctl enable "${GUI_DOMAIN}/${LABEL}" 2>/dev/null || true
     launchctl unload "${PLIST_DST}" 2>/dev/null || true
     ln -sf "${PLIST_SRC}" "${PLIST_DST}"
     launchctl load "${PLIST_DST}"
@@ -54,6 +57,15 @@ cmd_reload() {
 cmd_unload() {
     launchctl unload "${PLIST_DST}" 2>/dev/null || true
     echo "已 unload（若此前未加载则无影响）"
+}
+
+cmd_disable() {
+    launchctl bootout "${GUI_DOMAIN}/${LABEL}" 2>/dev/null || true
+    launchctl disable "${GUI_DOMAIN}/${LABEL}" 2>/dev/null || true
+    launchctl unload "${PLIST_DST}" 2>/dev/null || true
+    launchctl remove "${LABEL}" 2>/dev/null || true
+    rm -f "${PLIST_DST}"
+    echo "已彻底停用 ${LABEL}：不会再由 LaunchAgent 自动拉起"
 }
 
 cmd_kickstart() {
@@ -69,6 +81,7 @@ case "${1:-install}" in
     install)   cmd_install ;;
     reload)    cmd_reload ;;
     unload)    cmd_unload ;;
+    disable)   cmd_disable ;;
     kickstart) cmd_kickstart ;;
     status)    cmd_status ;;
     -h|--help|help)

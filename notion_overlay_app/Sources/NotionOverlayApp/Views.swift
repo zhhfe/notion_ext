@@ -97,6 +97,15 @@ struct TodaySectionView: View {
 struct WeekSectionView: View {
     let section: WeekSection?
 
+    private func normalizedWeekdayRange(_ value: String) -> String {
+        let trimmed = value
+            .replacingOccurrences(of: "(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.replacingOccurrences(of: "-", with: " - ")
+            .replacingOccurrences(of: "  ", with: " ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("本周 todo")
@@ -109,7 +118,7 @@ struct WeekSectionView: View {
                     RowView(
                         leading: item.done ? "✅" : "⬜",
                         title: item.taskName,
-                        trailing: item.weekdayRange.trimmingCharacters(in: .whitespaces)
+                        trailing: normalizedWeekdayRange(item.weekdayRange)
                     )
                 }
             } else {

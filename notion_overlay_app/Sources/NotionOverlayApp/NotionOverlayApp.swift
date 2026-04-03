@@ -37,5 +37,13 @@ struct NotionOverlayApp: App {
                 .environmentObject(environment.settings)
                 .environmentObject(environment.appState)
         }
+        .commands {
+            CommandMenu("Overlay") {
+                Button("刷新内容") {
+                    environment.appState.refreshNow()
+                }
+                .keyboardShortcut("r", modifiers: [.command])
+            }
+        }
     }
 }

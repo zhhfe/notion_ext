@@ -56,7 +56,7 @@ class DailyDigestSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.today.progress.total_count, 2)
         self.assertEqual(snapshot.today.items[0].name, "进行中任务")
         self.assertEqual(snapshot.today.items[0].display_time, "09:00 - 10:00")
-        self.assertEqual(snapshot.week.items[0].weekday_range, " (周一-周二)")
+        self.assertEqual(snapshot.week.items[0].weekday_range, "周一 - 周二")
         self.assertEqual(snapshot.reminders.pending_count, 1)
         self.assertEqual(snapshot.reminders.items[0].name, "提醒 A")
         self.assertEqual(len(snapshot.running_items), 1)

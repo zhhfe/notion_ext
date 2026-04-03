@@ -69,10 +69,20 @@ cd /path/to/notion_ext
 ```bash
 ./notion_ext_launchagent.sh reload     # 改了 plist 后重载并 kickstart
 ./notion_ext_launchagent.sh unload     # 卸载（不删除 ~/Library/LaunchAgents 下的链接）
+./notion_ext_launchagent.sh disable    # 彻底停掉并禁止自动拉起（推荐用于排障/停用）
 ./notion_ext_launchagent.sh kickstart  # 强制重启任务
 ./notion_ext_launchagent.sh status     # 查看状态
 ./notion_ext_launchagent.sh help       # 帮助
 ```
+
+如果你遇到“kill 之后马上又起来”的情况，通常是 LaunchAgent 的 `KeepAlive` 在拉起。直接执行：
+
+```bash
+cd /path/to/notion_ext
+./notion_ext_launchagent.sh disable
+```
+
+执行后会做三件事：`bootout` 当前任务、`disable` 该 Label、删除 `~/Library/LaunchAgents` 下的链接，从而彻底停止自动重启。
 
 说明：
 

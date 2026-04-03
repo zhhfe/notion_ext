@@ -19,6 +19,7 @@ final class OverlayAppState: ObservableObject {
     private let hotKeyManager = HotKeyManager.shared
     private let settingsWindowManager = SettingsWindowManager()
     private let backendServiceManager = BackendServiceManager()
+    private let remindersPermissionManager = RemindersPermissionManager()
     private var pollingTask: Task<Void, Never>?
     private var currentRefreshTask: Task<Void, Never>?
     private var subscriptions = Set<AnyCancellable>()
@@ -33,11 +34,15 @@ final class OverlayAppState: ObservableObject {
 
     func bootstrap() {
         AppLogger.shared.log("AppState bootstrap start")
-        if settings.autoManagePythonService {
-            backendServiceManager.startIfNeeded(
-                projectRoot: settings.pythonProjectRoot,
-                serviceURL: settings.serviceURL
-            )
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await remindersPermissionManager.requestIfNeeded()
+            if settings.autoManagePythonService {
+                backendServiceManager.startIfNeeded(
+                    projectRoot: settings.pythonProjectRoot,
+                    serviceURL: settings.serviceURL
+                )
+            }
         }
         let rootView = AnyView(OverlayRootView().environmentObject(self).environmentObject(settings))
         windowManager.configure(with: rootView)
