@@ -1,9 +1,15 @@
 .env
 env.sh
 *.log
+*.DS_Store
 __pycache__/
 *.pyc
 .venv/
 .idea/
 /com.zhouhuaifeng.notion-ext.plist
 read_reminders_cli/.build/
+notion_overlay_app/notion_overlay_app.log
+notion_overlay_app/dist/
+notion_overlay_app/.build/
+*.app
+notion_ext_report_settings.json

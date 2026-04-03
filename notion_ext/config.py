@@ -30,9 +30,11 @@ CALENDAR_SERVER_PORT = int(os.environ.get("CALENDAR_SERVER_PORT", "33189"))
 REPORT_CRON_MINUTE = os.environ.get("REPORT_CRON_MINUTE", "0,30")
 REPORT_CRON_HOUR = os.environ.get("REPORT_CRON_HOUR", "10-22")
 TZ = os.environ.get("TZ", "Asia/Shanghai")
+DINGTALK_ENABLED_DEFAULT = os.environ.get("DINGTALK_ENABLED", "true").lower() in ("true", "1", "yes")
 
 # ── Paths ─────────────────────────────────────────────────
 LOG_PATH = PROJECT_ROOT / "notion_ext.log"
+REPORT_SETTINGS_PATH = PROJECT_ROOT / "notion_ext_report_settings.json"
 
 
 def _resolve_reminders_cli_path() -> Path:

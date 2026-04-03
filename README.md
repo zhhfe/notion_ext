@@ -3,6 +3,7 @@
 Notion 扩展工具，一个常驻服务：
 
 - **HTTP 服务** — 提供 `/calendar.ics` 端点，供 Apple Calendar 订阅 Notion 任务
+- **客户端数据接口** — 提供 `/report/overlay` 和 `/report/text`，供本地 macOS 悬浮窗客户端读取
 - **定时日报** — 按配置的 cron 时间，自动查询 Notion + macOS 提醒事项，发送钉钉日报
 
 ## 安装
@@ -28,31 +29,56 @@ python -m notion_ext report
 
 启动后：
 - HTTP 服务监听端口（默认 33189），Apple Calendar 订阅 `http://IP:33189/calendar.ics`
+- 本机客户端可读取 `http://127.0.0.1:33189/report/overlay`
 - 定时任务按 cron 配置自动执行日报（默认每半小时，10:00-22:30）
+
+### macOS 悬浮窗客户端
+
+仓库新增了一个原生 macOS 客户端包：`notion_overlay_app/`
+
+```bash
+cd notion_overlay_app
+swift run
+```
+
+客户端特性：
+
+- 毛玻璃悬浮窗，支持拖拽移动和窗口缩放
+- 全局快捷键切换显示/隐藏
+- 全局快捷键切换“所有桌面置顶”
+- 菜单栏入口、设置页、透明度和材质调节
+- 自动轮询 `/report/overlay` 展示与钉钉一致的日报内容
+
+说明：
+
+- 推荐在 Xcode 中打开 `Package.swift` 作为 macOS App 包进行调试与归档。
+- 登录自启动依赖 `.app` 形态；若直接通过 `swift run` 运行，设置页会给出提示。
 
 ### macOS 开机自启（LaunchAgent）
 
 将服务注册为 LaunchAgent，登录后自动启动、崩溃自动重启：
 
 ```bash
-# 安装
-ln -sf /path/to/notion_ext/com.notion-ext.plist \
-       ~/Library/LaunchAgents/com.notion-ext.plist
-launchctl load ~/Library/LaunchAgents/com.notion-ext.plist
+# 推荐：使用项目自带脚本一键安装/重载（会自动 kickstart 立即生效）
+cd /path/to/notion_ext
+./notion_ext_launchagent.sh
 ```
 
-常用管理命令：
+常用管理命令（脚本版）：
 
 ```bash
-launchctl start com.notion-ext    # 启动
-launchctl stop com.notion-ext     # 停止
-launchctl unload ~/Library/LaunchAgents/com.notion-ext.plist  # 卸载
-launchctl list | grep notion-ext               # 查看状态
+./notion_ext_launchagent.sh reload     # 改了 plist 后重载并 kickstart
+./notion_ext_launchagent.sh unload     # 卸载（不删除 ~/Library/LaunchAgents 下的链接）
+./notion_ext_launchagent.sh kickstart  # 强制重启任务
+./notion_ext_launchagent.sh status     # 查看状态
+./notion_ext_launchagent.sh help       # 帮助
 ```
 
-```bash
-launchctl kickstart -k gui/$(id -u)/com.zhouhuaifeng.notion-ext
-````
+说明：
+
+- `notion_ext_launchagent.sh` 会自动解析当前项目路径（基于脚本所在目录），避免项目移动/改名后 plist 仍指向旧路径导致启动失败。
+- 如需手工排障，可直接使用 `launchctl`，脚本内部等价于执行 `ln -sf`、`launchctl unload/load` 和 `launchctl kickstart` 等操作。
+- 对外发布仓库时建议仅保留 `com.zhouhuaifeng.notion-ext.plist.example`，并在本机复制为 `com.zhouhuaifeng.notion-ext.plist` 后将 `__PROJECT_ROOT__` 替换为实际项目路径。
 
 ## 项目结构
 
@@ -61,6 +87,7 @@ notion_ext/
 ├── .env / .env.example       # 环境变量配置
 ├── pyproject.toml             # 项目元数据 + 依赖
 ├── requirements.txt
+├── notion_ext_launchagent.sh   # macOS LaunchAgent 管理脚本
 ├── run_cron.sh                # 启动脚本（设置代理等环境变量）
 ├── read_reminders_cli/        # macOS 提醒事项 Swift CLI（EventKit）
 └── notion_ext/                # Python 包
