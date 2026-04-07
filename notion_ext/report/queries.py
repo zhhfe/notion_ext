@@ -9,6 +9,43 @@ from ..config import NOTION_TODAY_DB_ID, NOTION_WEEK_DB_ID
 from ..models import TodayTask, WeekTask
 from ..notion_api import extract_prop, query_database
 
+_TIME_START_CANDIDATES = ("start", "start_time", "from", "begin")
+_TIME_END_CANDIDATES = ("end", "end_time", "to", "finish")
+
+
+def _extract_time_range(page: dict, property_name: str = "Time") -> tuple[Optional[str], Optional[str], Optional[str], Optional[str], list[str]]:
+    """从 Notion date 属性提取开始/结束时间，并返回实际使用的键名。"""
+    prop = page.get("properties", {}).get(property_name, {})
+    raw_date = prop.get("date") if prop.get("type") == "date" else None
+    if not isinstance(raw_date, dict):
+        return None, None, None, None, []
+
+    available_keys = list(raw_date.keys())
+    start_key = next((key for key in _TIME_START_CANDIDATES if key in raw_date), None)
+    end_key = next((key for key in _TIME_END_CANDIDATES if key in raw_date), None)
+    start_value = raw_date.get(start_key) if start_key else None
+    end_value = raw_date.get(end_key) if end_key else None
+    return start_value, end_value, start_key, end_key, available_keys
+
+
+def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        normalized = value if "T" in value else f"{value}T00:00:00"
+        return datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _parse_iso_timestamp(value: Optional[str]) -> Optional[float]:
+    dt = _parse_iso_datetime(value)
+    return dt.timestamp() if dt else None
+
+
+_REPORT_QUERY_TIMEOUT = 12
+_REPORT_QUERY_MAX_ATTEMPTS = 2
+
 
 def query_today(now: Optional[datetime] = None) -> list[TodayTask]:
     """查询 Notion 今日条目。失败返回空列表。"""
@@ -25,17 +62,22 @@ def query_today(now: Optional[datetime] = None) -> list[TodayTask]:
         }
     }
 
-    pages = query_database(NOTION_TODAY_DB_ID, body)
+    pages = query_database(
+        NOTION_TODAY_DB_ID,
+        body,
+        timeout=_REPORT_QUERY_TIMEOUT,
+        max_attempts=_REPORT_QUERY_MAX_ATTEMPTS,
+    )
     items = []
     for page in pages:
-        time_prop = page.get("properties", {}).get("Time", {})
-        raw_date = time_prop.get("date") if time_prop.get("type") == "date" else None
+        time_start, time_end, start_key, end_key, available_keys = _extract_time_range(page, "Time")
         items.append(TodayTask(
+            id=page.get("id", ""),
             name=extract_prop(page, "Name") or "",
             status=extract_prop(page, "Status"),
             done=bool(extract_prop(page, "Done")),
-            time_start=raw_date.get("start") if raw_date else None,
-            time_end=raw_date.get("end") if raw_date else None,
+            time_start=time_start,
+            time_end=time_end,
         ))
     return items
 
@@ -52,29 +94,43 @@ def _get_week_range(now: Optional[datetime] = None) -> tuple[str, str]:
 def query_this_week_tasks(now: Optional[datetime] = None) -> list[WeekTask]:
     """查询本周任务（含分页），失败返回空列表。"""
     week_start, week_end = _get_week_range(now)
+    week_start_ts = datetime.fromisoformat(f"{week_start}T00:00:00").timestamp()
+    week_end_ts = datetime.fromisoformat(f"{week_end}T00:00:00").timestamp()
 
     body = {
         "filter": {
             "and": [
-                {"property": "Start Date", "date": {"on_or_after": week_start}},
-                {"property": "Start Date", "date": {"before": week_end}},
-                {"property": "End Date", "date": {"on_or_after": week_start}},
-                {"property": "End Date", "date": {"before": week_end}},
+                {"property": "Time", "date": {"on_or_after": week_start}},
+                {"property": "Time", "date": {"before": week_end}},
             ]
         }
     }
 
-    pages = query_database(NOTION_WEEK_DB_ID, body)
+    pages = query_database(
+        NOTION_WEEK_DB_ID,
+        body,
+        timeout=_REPORT_QUERY_TIMEOUT,
+        max_attempts=_REPORT_QUERY_MAX_ATTEMPTS,
+    )
     items = []
     for page in pages:
-        start_obj = extract_prop(page, "Start Date")
-        end_obj = extract_prop(page, "End Date")
+        time_start, time_end, start_key, end_key, available_keys = _extract_time_range(page, "Time")
+
+        start_ts = _parse_iso_timestamp(time_start)
+        end_ts = _parse_iso_timestamp(time_end) if time_end else start_ts
+        if start_ts is not None and end_ts is not None:
+            # 使用 Time 的开始/结束时间判断是否落在本周（有交集即可）。
+            if end_ts < week_start_ts or start_ts >= week_end_ts:
+                continue
+
         items.append(WeekTask(
             task_name=extract_prop(page, "Task name") or "",
-            start_date=start_obj.get("start") if start_obj else None,
-            end_date=(end_obj.get("start") or end_obj.get("end")) if end_obj else None,
+            start_date=(time_start or "")[:10] or None,
+            end_date=(time_end or time_start or "")[:10] or None,
+            time_start=time_start,
+            time_end=time_end,
             done=bool(extract_prop(page, "Done")),
             id=page.get("id", ""),
         ))
-    items.sort(key=lambda t: t.start_date or "")
+    items.sort(key=lambda task: _parse_iso_timestamp(task.time_start) or float("inf"))
     return items

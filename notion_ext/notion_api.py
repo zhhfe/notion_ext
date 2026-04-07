@@ -56,11 +56,19 @@ def _is_retriable(exc: Exception) -> bool:
     return isinstance(exc, (requests.ConnectionError, requests.Timeout))
 
 
-def query_database(db_id: str, body: dict) -> list[dict]:
+def query_database(
+    db_id: str,
+    body: dict,
+    *,
+    max_attempts: int | None = None,
+    timeout: int | float | None = None,
+) -> list[dict]:
     """带分页和重试的 Notion 数据库查询，返回原始 page 对象列表。"""
     url = f"{_API_BASE}/databases/{db_id}/query"
+    attempts = max_attempts or _MAX_ATTEMPTS
+    req_timeout = timeout or _TIMEOUT
 
-    for attempt in range(1, _MAX_ATTEMPTS + 1):
+    for attempt in range(1, attempts + 1):
         try:
             all_pages: list[dict] = []
             cursor = None
@@ -68,7 +76,7 @@ def query_database(db_id: str, body: dict) -> list[dict]:
                 payload = {**body}
                 if cursor:
                     payload["start_cursor"] = cursor
-                resp = requests.post(url, json=payload, headers=_headers(), timeout=_TIMEOUT)
+                resp = requests.post(url, json=payload, headers=_headers(), timeout=req_timeout)
                 resp.raise_for_status()
                 data = resp.json()
                 all_pages.extend(data.get("results", []))
@@ -78,11 +86,11 @@ def query_database(db_id: str, body: dict) -> list[dict]:
                     break
             return all_pages
         except requests.HTTPError as exc:
-            logger.error("Notion HTTP 错误 (attempt %d/%d): %s", attempt, _MAX_ATTEMPTS, exc)
+            logger.error("Notion HTTP 错误 (attempt %d/%d): %s", attempt, attempts, exc)
             return []
         except requests.RequestException as exc:
-            logger.error("Notion 网络错误 (attempt %d/%d): %s", attempt, _MAX_ATTEMPTS, exc)
-            if attempt < _MAX_ATTEMPTS and _is_retriable(exc):
+            logger.error("Notion 网络错误 (attempt %d/%d): %s", attempt, attempts, exc)
+            if attempt < attempts and _is_retriable(exc):
                 time.sleep(attempt)
                 continue
             return []

@@ -6,6 +6,7 @@ from typing import Optional
 
 @dataclass
 class TodayTask:
+    id: str
     name: str
     status: Optional[str]
     done: bool
@@ -20,10 +21,13 @@ class WeekTask:
     id: str
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    time_start: Optional[str] = None
+    time_end: Optional[str] = None
 
 
 @dataclass
 class Reminder:
+    id: str
     name: str
     completed: bool
 
@@ -38,6 +42,7 @@ class CalendarEvent:
 
 @dataclass
 class TodaySnapshotItem:
+    id: str
     name: str
     status: Optional[str]
     done: bool
@@ -58,6 +63,7 @@ class WeekSnapshotItem:
 
 @dataclass
 class ReminderSnapshotItem:
+    id: str
     name: str
     completed: bool
 
@@ -89,6 +95,18 @@ class ReminderSectionSnapshot:
 
 
 @dataclass
+class PeriodProgressSnapshot:
+    percent: int
+
+
+@dataclass
+class PeriodsSnapshot:
+    month: PeriodProgressSnapshot
+    quarter: PeriodProgressSnapshot
+    year: PeriodProgressSnapshot
+
+
+@dataclass
 class DailyDigestSnapshot:
     generated_at: str
     title: str
@@ -97,3 +115,4 @@ class DailyDigestSnapshot:
     today: TodaySectionSnapshot
     week: WeekSectionSnapshot
     reminders: ReminderSectionSnapshot
+    periods: PeriodsSnapshot

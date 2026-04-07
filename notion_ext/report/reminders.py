@@ -13,9 +13,9 @@ from ..models import Reminder
 logger = logging.getLogger(__name__)
 
 
-def _read_live_reminders() -> list[Reminder]:
+def _run_reminders_cli(*args: str) -> str:
     result = subprocess.run(
-        [str(REMINDERS_CLI_PATH)],
+        [str(REMINDERS_CLI_PATH), *args],
         capture_output=True,
         text=True,
         timeout=30,
@@ -23,14 +23,20 @@ def _read_live_reminders() -> list[Reminder]:
     if result.returncode != 0:
         err = (result.stderr or result.stdout or "").strip()
         raise RuntimeError(err or "read_reminders_cli exit code != 0")
+    return result.stdout.strip()
 
-    data = json.loads(result.stdout.strip())
+
+def _read_live_reminders() -> list[Reminder]:
+    output = _run_reminders_cli()
+
+    data = json.loads(output)
     reminders: list[Reminder] = []
     for lst in data.get("lists", []):
         for rem in lst.get("reminders", []):
             if rem.get("name"):
                 reminders.append(
                     Reminder(
+                        id=rem.get("id") or "",
                         name=rem["name"],
                         completed=bool(rem.get("completed")),
                     )
@@ -62,3 +68,16 @@ def read_reminders() -> list[Reminder]:
         else:
             logger.warning("读取 Apple 提醒事项失败: %s", exc)
         return []
+
+
+def complete_reminder(reminder_id: str, completed: bool = True) -> bool:
+    """按 identifier 更新提醒项完成状态。"""
+    if sys.platform != "darwin":
+        raise RuntimeError("仅支持 macOS 提醒事项写回")
+    if not reminder_id:
+        raise RuntimeError("提醒事项 id 不能为空")
+    if not REMINDERS_CLI_PATH.exists():
+        raise RuntimeError(f"提醒事项 CLI 不存在: {REMINDERS_CLI_PATH}")
+
+    _run_reminders_cli("--set-completed", reminder_id, "true" if completed else "false")
+    return True

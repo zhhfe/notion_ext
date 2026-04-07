@@ -17,8 +17,8 @@ from ..config import (
 from .ics_generator import generate_ics
 from .notion_updater import update_default_page_time
 from .queries import query_recent_tasks
-from ..report import collect_daily_digest_snapshot
-from ..report.settings import get_report_settings, set_dingtalk_enabled
+from ..report import collect_daily_digest_snapshot, complete_item
+from ..report.settings import get_report_settings, set_dingtalk_enabled, set_reminders_enabled
 from ..report.snapshot import snapshot_to_dict
 
 logger = logging.getLogger(__name__)
@@ -58,9 +58,35 @@ def _build_report_settings() -> bytes:
 
 def _update_report_settings(body: bytes) -> bytes:
     data = json.loads((body or b"{}").decode("utf-8"))
-    enabled = bool(data.get("dingtalk_enabled", True))
-    result = set_dingtalk_enabled(enabled)
-    return json.dumps(result, ensure_ascii=False).encode("utf-8")
+    dingtalk_enabled = bool(data.get("dingtalk_enabled", True))
+    reminders_enabled = bool(data.get("reminders_enabled", False))
+    set_dingtalk_enabled(dingtalk_enabled)
+    set_reminders_enabled(reminders_enabled)
+    return json.dumps(get_report_settings(), ensure_ascii=False).encode("utf-8")
+
+
+def _complete_report_item(body: bytes) -> tuple[int, bytes]:
+    try:
+        data = json.loads((body or b"{}").decode("utf-8"))
+    except json.JSONDecodeError:
+        return 400, json.dumps({"ok": False, "error": "请求体不是有效 JSON"}, ensure_ascii=False).encode("utf-8")
+
+    kind = data.get("kind")
+    item_id = data.get("id")
+    value = data.get("value", True)
+    if not isinstance(kind, str) or not kind:
+        return 400, json.dumps({"ok": False, "error": "缺少 kind"}, ensure_ascii=False).encode("utf-8")
+    if not isinstance(item_id, str) or not item_id:
+        return 400, json.dumps({"ok": False, "error": "缺少 id"}, ensure_ascii=False).encode("utf-8")
+    if not isinstance(value, bool):
+        return 400, json.dumps({"ok": False, "error": "value 必须为布尔值"}, ensure_ascii=False).encode("utf-8")
+
+    ok, error = complete_item(kind, item_id, value=value)
+    if ok:
+        return 200, json.dumps({"ok": True}, ensure_ascii=False).encode("utf-8")
+    if error and error.startswith("不支持的 kind"):
+        return 400, json.dumps({"ok": False, "error": error}, ensure_ascii=False).encode("utf-8")
+    return 500, json.dumps({"ok": False, "error": error or "写回失败"}, ensure_ascii=False).encode("utf-8")
 
 
 def get_response_for_path(path: str) -> tuple[int, str, bytes]:
@@ -78,6 +104,9 @@ def get_response_for_request(method: str, path: str, body: bytes = b"") -> tuple
         return 200, "application/json; charset=utf-8", _build_report_settings()
     if path == "/report/settings" and method == "POST":
         return 200, "application/json; charset=utf-8", _update_report_settings(body)
+    if path == "/report/complete" and method == "POST":
+        status, payload = _complete_report_item(body)
+        return status, "application/json; charset=utf-8", payload
     return 404, "text/plain; charset=utf-8", b"Not Found"
 
 

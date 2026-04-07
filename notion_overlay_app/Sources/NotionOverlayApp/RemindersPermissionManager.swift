@@ -5,6 +5,11 @@ import Foundation
 final class RemindersPermissionManager {
     private var hasRequested = false
 
+    func logCurrentStatus() {
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+        AppLogger.shared.log("Reminders auth status: \(status.rawValue)")
+    }
+
     func requestIfNeeded() async {
         guard !hasRequested else { return }
         hasRequested = true

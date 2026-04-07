@@ -4,27 +4,81 @@ import Foundation
 /// 输出与旧版 JXA 脚本兼容的 JSON，供 Python `notion_ext.report.reminders` 解析。
 @main
 enum CLI {
-    static func main() async {
-        let store = EKEventStore()
+    private static func currentAuthorizationStatus() -> EKAuthorizationStatus {
+        EKEventStore.authorizationStatus(for: .reminder)
+    }
 
-        let granted: Bool
+    private static func hasAccess(_ status: EKAuthorizationStatus) -> Bool {
         if #available(macOS 14.0, *) {
-            granted = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            return status == .fullAccess
+        }
+        return status == .authorized
+    }
+
+    private static func requestAccess(store: EKEventStore) async -> Bool {
+        if #available(macOS 14.0, *) {
+            return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
                 store.requestFullAccessToReminders { ok, _ in
                     cont.resume(returning: ok)
                 }
             }
-        } else {
-            granted = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
-                store.requestAccess(to: .reminder) { ok, _ in
-                    cont.resume(returning: ok)
-                }
+        }
+        return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            store.requestAccess(to: .reminder) { ok, _ in
+                cont.resume(returning: ok)
             }
+        }
+    }
+
+    private static func setReminderCompleted(by identifier: String, completed: Bool, store: EKEventStore) {
+        guard let item = store.calendarItem(withIdentifier: identifier) as? EKReminder else {
+            fputs("read_reminders_cli: 未找到 identifier=\(identifier) 的提醒事项\n", stderr)
+            exit(2)
+        }
+
+        if item.isCompleted == completed {
+            print("{\"ok\":true,\"no_change\":true}")
+            return
+        }
+
+        item.isCompleted = completed
+        item.completionDate = completed ? Date() : nil
+        do {
+            try store.save(item, commit: true)
+            print("{\"ok\":true}")
+        } catch {
+            fputs("read_reminders_cli: 标记完成失败: \(error)\n", stderr)
+            exit(1)
+        }
+    }
+
+    static func main() async {
+        let store = EKEventStore()
+        let status = currentAuthorizationStatus()
+        let granted: Bool
+        if hasAccess(status) {
+            granted = true
+        } else if status == .notDetermined {
+            granted = await requestAccess(store: store)
+        } else {
+            granted = false
         }
 
         guard granted else {
             fputs("read_reminders_cli: 未获得「提醒事项」访问权限\n", stderr)
             exit(1)
+        }
+
+        let args = CommandLine.arguments
+        if args.count == 3, args[1] == "--complete" {
+            setReminderCompleted(by: args[2], completed: true, store: store)
+            return
+        }
+        if args.count == 4, args[1] == "--set-completed" {
+            let raw = args[3].lowercased()
+            let completed = raw == "true" || raw == "1" || raw == "yes"
+            setReminderCompleted(by: args[2], completed: completed, store: store)
+            return
         }
 
         let predicate = store.predicateForReminders(in: nil)
@@ -47,6 +101,7 @@ enum CLI {
                 due = iso.string(from: date)
             }
             let item = ReminderJSON(
+                id: r.calendarItemIdentifier,
                 name: title,
                 body: body,
                 dueDate: due,
@@ -90,6 +145,7 @@ private struct ListJSON: Encodable {
 }
 
 private struct ReminderJSON: Encodable {
+    let id: String
     let name: String
     let body: String
     let dueDate: String?

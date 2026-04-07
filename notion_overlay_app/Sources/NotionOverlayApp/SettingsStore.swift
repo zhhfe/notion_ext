@@ -63,6 +63,9 @@ final class SettingsStore: ObservableObject {
     @Published var dingtalkEnabled: Bool {
         didSet { defaults.set(dingtalkEnabled, forKey: SettingsKey.dingtalkEnabled) }
     }
+    @Published var remindersEnabled: Bool {
+        didSet { defaults.set(remindersEnabled, forKey: SettingsKey.remindersEnabled) }
+    }
     @Published var toggleWindowHotKey: HotKeyDescriptor {
         didSet { defaults.set(encode(hotKey: toggleWindowHotKey), forKey: SettingsKey.toggleWindowHotKey) }
     }
@@ -79,7 +82,7 @@ final class SettingsStore: ObservableObject {
         pythonProjectRoot = defaults.string(forKey: SettingsKey.pythonProjectRoot) ?? "/Users/zhouhuaifeng/Code/personal/py_workspace/notion_ext"
         autoManagePythonService = defaults.object(forKey: SettingsKey.autoManagePythonService) as? Bool ?? true
         requestTimeout = defaults.object(forKey: SettingsKey.requestTimeout) as? Double ?? 8
-        refreshInterval = defaults.object(forKey: SettingsKey.refreshInterval) as? Double ?? 60
+        refreshInterval = defaults.object(forKey: SettingsKey.refreshInterval) as? Double ?? 300
         showOnLaunch = defaults.object(forKey: SettingsKey.showOnLaunch) as? Bool ?? true
         rememberWindowFrame = defaults.object(forKey: SettingsKey.rememberWindowFrame) as? Bool ?? true
         launchAtLogin = defaults.object(forKey: SettingsKey.launchAtLogin) as? Bool ?? false
@@ -95,6 +98,7 @@ final class SettingsStore: ObservableObject {
         enableClickThrough = defaults.object(forKey: SettingsKey.enableClickThrough) as? Bool ?? false
         fadeWhenInactive = defaults.object(forKey: SettingsKey.fadeWhenInactive) as? Bool ?? false
         dingtalkEnabled = defaults.object(forKey: SettingsKey.dingtalkEnabled) as? Bool ?? true
+        remindersEnabled = defaults.object(forKey: SettingsKey.remindersEnabled) as? Bool ?? false
         toggleWindowHotKey = Self.decodeHotKey(defaults.string(forKey: SettingsKey.toggleWindowHotKey)) ?? .toggleWindowDefault
         togglePinHotKey = Self.decodeHotKey(defaults.string(forKey: SettingsKey.togglePinHotKey)) ?? .togglePinDefault
     }

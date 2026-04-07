@@ -6,7 +6,7 @@ import json
 import threading
 from pathlib import Path
 
-from ..config import DINGTALK_ENABLED_DEFAULT, REPORT_SETTINGS_PATH
+from ..config import DINGTALK_ENABLED_DEFAULT, REMINDERS_ENABLED_DEFAULT, REPORT_SETTINGS_PATH
 
 _LOCK = threading.RLock()
 _CACHE: dict | None = None
@@ -59,6 +59,23 @@ def set_dingtalk_enabled(enabled: bool) -> dict:
     return {"dingtalk_enabled": bool(enabled)}
 
 
-def get_report_settings() -> dict:
-    return {"dingtalk_enabled": get_dingtalk_enabled()}
+def get_reminders_enabled() -> bool:
+    data = _get_settings()
+    value = data.get("reminders_enabled")
+    if isinstance(value, bool):
+        return value
+    return REMINDERS_ENABLED_DEFAULT
 
+
+def set_reminders_enabled(enabled: bool) -> dict:
+    data = _get_settings()
+    data["reminders_enabled"] = bool(enabled)
+    _set_settings(data)
+    return {"reminders_enabled": bool(enabled)}
+
+
+def get_report_settings() -> dict:
+    return {
+        "dingtalk_enabled": get_dingtalk_enabled(),
+        "reminders_enabled": get_reminders_enabled(),
+    }

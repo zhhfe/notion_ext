@@ -11,10 +11,13 @@ final class AppLogger {
         formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
 
-        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-        fileURL = cwd.appendingPathComponent("notion_overlay_app.log")
+        fileURL = Self.resolveLogFileURL()
 
         if !FileManager.default.fileExists(atPath: fileURL.path) {
+            try? FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             FileManager.default.createFile(atPath: fileURL.path, contents: Data(), attributes: nil)
         }
     }
@@ -34,5 +37,27 @@ final class AppLogger {
             }
         }
     }
-}
 
+    private static func resolveLogFileURL() -> URL {
+        let fileManager = FileManager.default
+
+        if let configuredRoot = UserDefaults.standard.string(forKey: "pythonProjectRoot")?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !configuredRoot.isEmpty {
+            let configuredURL = URL(fileURLWithPath: configuredRoot, isDirectory: true).standardizedFileURL
+            var isDir: ObjCBool = false
+            if fileManager.fileExists(atPath: configuredURL.path, isDirectory: &isDir), isDir.boolValue {
+                return configuredURL.appendingPathComponent("notion_ext.log")
+            }
+        }
+
+        let cwd = URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true).standardizedFileURL
+        let projectRoot: URL
+        if cwd.lastPathComponent == "notion_overlay_app" {
+            projectRoot = cwd.deletingLastPathComponent()
+        } else {
+            projectRoot = cwd
+        }
+        return projectRoot.appendingPathComponent("notion_ext.log")
+    }
+}

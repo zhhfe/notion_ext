@@ -63,11 +63,6 @@ def _start_ts(iso: Optional[str]) -> float:
     return dt.timestamp() if dt else float("inf")
 
 
-def _sort_incomplete_first(items, *, is_done, sort_key):
-    """未完成在前、已完成在后；同组内按 sort_key 升序。"""
-    return sorted(items, key=lambda it: (is_done(it), sort_key(it)))
-
-
 # ── 三段格式化 ────────────────────────────────────────────
 
 
@@ -78,11 +73,7 @@ def format_today(items: list[TodayTask]) -> str:
     done_count = sum(1 for it in items if it.done)
     bar = _progress_bar(done_count, len(items))
 
-    sorted_items = _sort_incomplete_first(
-        items,
-        is_done=lambda it: it.done,
-        sort_key=lambda it: _start_ts(it.time_start),
-    )
+    sorted_items = sorted(items, key=lambda it: _start_ts(it.time_start))
 
     lines = []
     for it in sorted_items:
@@ -107,11 +98,7 @@ def format_week_tasks(items: list[WeekTask]) -> str:
     done_count = sum(1 for it in items if it.done)
     bar = _progress_bar(done_count, len(items))
 
-    sorted_items = _sort_incomplete_first(
-        items,
-        is_done=lambda it: it.done,
-        sort_key=lambda it: it.start_date or "\xff",
-    )
+    sorted_items = sorted(items, key=lambda it: _start_ts(it.time_start))
 
     lines = []
     for it in sorted_items:

@@ -10,6 +10,7 @@ struct OverlayResponse: Codable {
     let today: TodaySection
     let week: WeekSection
     let reminders: ReminderSection
+    let periods: PeriodsSection?
 }
 
 struct TodaySection: Codable {
@@ -34,15 +35,24 @@ struct ProgressPayload: Codable {
     let bar: String
 }
 
+struct PeriodsSection: Codable {
+    let month: PeriodProgressPayload
+    let quarter: PeriodProgressPayload
+    let year: PeriodProgressPayload
+}
+
+struct PeriodProgressPayload: Codable {
+    let percent: Int
+}
+
 struct TodayItem: Codable, Identifiable {
+    let id: String
     let name: String
     let status: String?
     let done: Bool
     let timeStart: String?
     let timeEnd: String?
     let displayTime: String
-
-    var id: String { "\(name)-\(timeStart ?? "none")-\(timeEnd ?? "none")" }
 }
 
 struct WeekItem: Codable, Identifiable {
@@ -55,14 +65,31 @@ struct WeekItem: Codable, Identifiable {
 }
 
 struct ReminderItem: Codable, Identifiable {
+    let id: String
     let name: String
     let completed: Bool
-
-    var id: String { name }
 }
 
 struct ReportSettingsPayload: Codable {
     let dingtalkEnabled: Bool
+    let remindersEnabled: Bool
+}
+
+struct CompleteItemRequestPayload: Codable {
+    let kind: String
+    let id: String
+    let value: Bool
+}
+
+struct CompleteItemResponsePayload: Codable {
+    let ok: Bool
+    let error: String?
+}
+
+enum OverlayCompleteKind: String {
+    case notionToday = "notion_today"
+    case notionWeek = "notion_week"
+    case appleReminder = "apple_reminder"
 }
 
 enum OverlayMaterial: String, CaseIterable, Identifiable {
@@ -233,6 +260,7 @@ enum SettingsKey {
     static let enableClickThrough = "enableClickThrough"
     static let fadeWhenInactive = "fadeWhenInactive"
     static let dingtalkEnabled = "dingtalkEnabled"
+    static let remindersEnabled = "remindersEnabled"
     static let toggleWindowHotKey = "toggleWindowHotKey"
     static let togglePinHotKey = "togglePinHotKey"
 }

@@ -11,6 +11,7 @@ final class OverlayAppState: ObservableObject {
     @Published var runtimeMessage: String?
     @Published private(set) var isWindowVisible = false
     @Published private(set) var isUpdatingDingtalkSetting = false
+    @Published private(set) var completingTokens = Set<String>()
 
     let settings: SettingsStore
 
@@ -36,7 +37,7 @@ final class OverlayAppState: ObservableObject {
         AppLogger.shared.log("AppState bootstrap start")
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await remindersPermissionManager.requestIfNeeded()
+            remindersPermissionManager.logCurrentStatus()
             if settings.autoManagePythonService {
                 backendServiceManager.startIfNeeded(
                     projectRoot: settings.pythonProjectRoot,
@@ -90,6 +91,32 @@ final class OverlayAppState: ObservableObject {
         settingsWindowManager.show(settings: settings, appState: self)
     }
 
+    func isCompleting(kind: OverlayCompleteKind, id: String) -> Bool {
+        completingTokens.contains(completionToken(kind: kind, id: id))
+    }
+
+    func setItemCompleted(kind: OverlayCompleteKind, id: String, value: Bool) {
+        guard !id.isEmpty else { return }
+        let token = completionToken(kind: kind, id: id)
+        guard !completingTokens.contains(token) else { return }
+        completingTokens.insert(token)
+
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.completingTokens.remove(token) }
+            do {
+                _ = try await apiClient.completeItem(settings: settings, kind: kind, id: id, value: value)
+                runtimeMessage = value ? "已标记完成" : "已恢复为未完成"
+                await refresh()
+            } catch {
+                runtimeMessage = "更新状态失败：\(error.localizedDescription)"
+                AppLogger.shared.log(
+                    "Set item completed failed: kind=\(kind.rawValue) id=\(id) value=\(value) error=\(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
     func updateDingtalkEnabled(_ enabled: Bool) {
         let previous = settings.dingtalkEnabled
         settings.dingtalkEnabled = enabled
@@ -98,14 +125,45 @@ final class OverlayAppState: ObservableObject {
             guard let self else { return }
             defer { isUpdatingDingtalkSetting = false }
             do {
-                let payload = try await apiClient.updateReportSettings(settings: settings, dingtalkEnabled: enabled)
+                let payload = try await apiClient.updateReportSettings(
+                    settings: settings,
+                    dingtalkEnabled: enabled,
+                    remindersEnabled: settings.remindersEnabled
+                )
                 settings.dingtalkEnabled = payload.dingtalkEnabled
+                settings.remindersEnabled = payload.remindersEnabled
                 runtimeMessage = payload.dingtalkEnabled ? "已开启钉钉发送" : "已关闭钉钉发送"
                 AppLogger.shared.log("Update dingtalk setting success: \(payload.dingtalkEnabled)")
             } catch {
                 settings.dingtalkEnabled = previous
                 runtimeMessage = "更新钉钉发送开关失败：\(error.localizedDescription)"
                 AppLogger.shared.log("Update dingtalk setting failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func updateRemindersEnabled(_ enabled: Bool) {
+        let previous = settings.remindersEnabled
+        settings.remindersEnabled = enabled
+        isUpdatingDingtalkSetting = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { isUpdatingDingtalkSetting = false }
+            do {
+                let payload = try await apiClient.updateReportSettings(
+                    settings: settings,
+                    dingtalkEnabled: settings.dingtalkEnabled,
+                    remindersEnabled: enabled
+                )
+                settings.dingtalkEnabled = payload.dingtalkEnabled
+                settings.remindersEnabled = payload.remindersEnabled
+                runtimeMessage = payload.remindersEnabled ? "已开启待办事项获取" : "已关闭待办事项获取"
+                refreshNow()
+                AppLogger.shared.log("Update reminders setting success: \(payload.remindersEnabled)")
+            } catch {
+                settings.remindersEnabled = previous
+                runtimeMessage = "更新待办事项开关失败：\(error.localizedDescription)"
+                AppLogger.shared.log("Update reminders setting failed: \(error.localizedDescription)")
             }
         }
     }
@@ -132,7 +190,7 @@ final class OverlayAppState: ObservableObject {
             guard let self else { return }
             while !Task.isCancelled {
                 await refresh()
-                let nanos = UInt64(max(settings.refreshInterval, 10) * 1_000_000_000)
+                let nanos = UInt64(max(settings.refreshInterval, 300) * 1_000_000_000)
                 try? await Task.sleep(nanoseconds: nanos)
             }
         }
@@ -144,7 +202,10 @@ final class OverlayAppState: ObservableObject {
             do {
                 let payload = try await apiClient.fetchReportSettings(settings: settings)
                 settings.dingtalkEnabled = payload.dingtalkEnabled
-                AppLogger.shared.log("Fetched report settings. dingtalkEnabled=\(payload.dingtalkEnabled)")
+                settings.remindersEnabled = payload.remindersEnabled
+                AppLogger.shared.log(
+                    "Fetched report settings. dingtalkEnabled=\(payload.dingtalkEnabled) remindersEnabled=\(payload.remindersEnabled)"
+                )
             } catch {
                 AppLogger.shared.log("Fetch report settings failed: \(error.localizedDescription)")
             }
@@ -264,6 +325,10 @@ final class OverlayAppState: ObservableObject {
         } catch {
             runtimeMessage = error.localizedDescription
         }
+    }
+
+    private func completionToken(kind: OverlayCompleteKind, id: String) -> String {
+        "\(kind.rawValue):\(id)"
     }
 }
 

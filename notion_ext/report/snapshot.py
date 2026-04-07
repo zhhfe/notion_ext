@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime
+from calendar import monthrange
 
 from ..models import (
     DailyDigestSnapshot,
+    PeriodProgressSnapshot,
+    PeriodsSnapshot,
     ProgressSnapshot,
     Reminder,
     ReminderSectionSnapshot,
@@ -75,10 +78,6 @@ def _start_ts(iso: str | None) -> float:
     return dt.timestamp() if dt else float("inf")
 
 
-def _sort_incomplete_first(items, *, is_done, sort_key):
-    return sorted(items, key=lambda item: (is_done(item), sort_key(item)))
-
-
 def _format_time_range(start_iso: str | None, end_iso: str | None) -> str:
     start = _to_hm(start_iso)
     end = _to_hm(end_iso)
@@ -96,6 +95,29 @@ def _build_progress(done_count: int, total_count: int) -> ProgressSnapshot:
     )
 
 
+def _build_calendar_periods(now: datetime) -> PeriodsSnapshot:
+    month_total = monthrange(now.year, now.month)[1]
+    month_elapsed = now.day
+
+    quarter_start_month = ((now.month - 1) // 3) * 3 + 1
+    quarter_start = date(now.year, quarter_start_month, 1)
+    quarter_elapsed = (now.date() - quarter_start).days + 1
+    quarter_total = 90
+
+    year_elapsed = now.timetuple().tm_yday
+    year_total = 365
+
+    month_percent = _progress_pct(month_elapsed, month_total)
+    quarter_percent = _progress_pct(min(quarter_elapsed, quarter_total), quarter_total)
+    year_percent = _progress_pct(min(year_elapsed, year_total), year_total)
+
+    return PeriodsSnapshot(
+        month=PeriodProgressSnapshot(percent=month_percent),
+        quarter=PeriodProgressSnapshot(percent=quarter_percent),
+        year=PeriodProgressSnapshot(percent=year_percent),
+    )
+
+
 def build_daily_digest_snapshot(
     today_items: list[TodayTask],
     week_items: list[WeekTask],
@@ -104,16 +126,13 @@ def build_daily_digest_snapshot(
 ) -> DailyDigestSnapshot:
     now = now or datetime.now()
 
-    today_sorted = _sort_incomplete_first(
-        today_items,
-        is_done=lambda item: item.done,
-        sort_key=lambda item: _start_ts(item.time_start),
-    )
+    today_sorted = sorted(today_items, key=lambda item: _start_ts(item.time_start))
     today_done = sum(1 for item in today_items if item.done)
     today_snapshot = TodaySectionSnapshot(
         progress=_build_progress(today_done, len(today_items)),
         items=[
             TodaySnapshotItem(
+                id=item.id,
                 name=item.name,
                 status=item.status,
                 done=item.done,
@@ -125,11 +144,7 @@ def build_daily_digest_snapshot(
         ],
     )
 
-    week_sorted = _sort_incomplete_first(
-        week_items,
-        is_done=lambda item: item.done,
-        sort_key=lambda item: item.start_date or "\xff",
-    )
+    week_sorted = sorted(week_items, key=lambda item: _start_ts(item.time_start))
     week_done = sum(1 for item in week_items if item.done)
     week_snapshot = WeekSectionSnapshot(
         progress=_build_progress(week_done, len(week_items)),
@@ -150,7 +165,7 @@ def build_daily_digest_snapshot(
     reminder_snapshot = ReminderSectionSnapshot(
         pending_count=len(pending_reminders),
         items=[
-            ReminderSnapshotItem(name=item.name, completed=item.completed)
+            ReminderSnapshotItem(id=item.id, name=item.name, completed=item.completed)
             for item in pending_reminders
         ],
     )
@@ -163,6 +178,7 @@ def build_daily_digest_snapshot(
         today=today_snapshot,
         week=week_snapshot,
         reminders=reminder_snapshot,
+        periods=_build_calendar_periods(now),
     )
 
 

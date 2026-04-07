@@ -18,9 +18,12 @@ struct OverlayRootView: View {
                 WindowDragHandle()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
+                        PeriodProgressHeaderView(periods: appState.snapshot?.periods)
                         TodaySectionView(section: appState.snapshot?.today)
                         WeekSectionView(section: appState.snapshot?.week)
-                        ReminderSectionView(section: appState.snapshot?.reminders)
+                        if settings.remindersEnabled {
+                            ReminderSectionView(section: appState.snapshot?.reminders)
+                        }
                         if settings.debugInfoEnabled, let text = appState.snapshot?.text {
                             DebugTextView(text: text)
                         }
@@ -35,6 +38,43 @@ struct OverlayRootView: View {
         .clipShape(RoundedRectangle(cornerRadius: settings.cornerRadius, style: .continuous))
         .shadow(color: Color.black.opacity(0.18), radius: settings.shadowRadius, y: 16)
         .frame(minWidth: 300, minHeight: 320)
+    }
+}
+
+struct PeriodProgressHeaderView: View {
+    let periods: PeriodsSection?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ProgressLineView(title: "本月", percent: periods?.month.percent ?? 0)
+            ProgressLineView(title: "本季度", percent: periods?.quarter.percent ?? 0)
+            ProgressLineView(title: "本年", percent: periods?.year.percent ?? 0)
+        }
+        .padding(.bottom, 2)
+    }
+}
+
+struct ProgressLineView: View {
+    let title: String
+    let percent: Int
+
+    private var value: Double {
+        Double(max(0, min(percent, 100))) / 100.0
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 44, alignment: .leading)
+            ProgressView(value: value)
+                .progressViewStyle(.linear)
+                .tint(Color.black.opacity(0.62))
+            Text("\(max(0, min(percent, 100)))%")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 38, alignment: .trailing)
+        }
     }
 }
 
@@ -69,6 +109,7 @@ final class DragCaptureView: NSView {
 }
 
 struct TodaySectionView: View {
+    @EnvironmentObject private var appState: OverlayAppState
     let section: TodaySection?
 
     var body: some View {
@@ -81,9 +122,13 @@ struct TodaySectionView: View {
             if let section, !section.items.isEmpty {
                 ForEach(section.items) { item in
                     RowView(
-                        leading: item.done ? "✅" : "⬜",
                         title: item.name,
-                        trailing: item.displayTime.isEmpty ? nil : item.displayTime
+                        trailing: item.displayTime.isEmpty ? nil : item.displayTime,
+                        isDone: item.done,
+                        isLoading: appState.isCompleting(kind: .notionToday, id: item.id),
+                        onComplete: item.id.isEmpty ? nil : {
+                            appState.setItemCompleted(kind: .notionToday, id: item.id, value: !item.done)
+                        }
                     )
                 }
             } else {
@@ -95,6 +140,7 @@ struct TodaySectionView: View {
 }
 
 struct WeekSectionView: View {
+    @EnvironmentObject private var appState: OverlayAppState
     let section: WeekSection?
 
     private func normalizedWeekdayRange(_ value: String) -> String {
@@ -116,9 +162,13 @@ struct WeekSectionView: View {
             if let section, !section.items.isEmpty {
                 ForEach(section.items) { item in
                     RowView(
-                        leading: item.done ? "✅" : "⬜",
                         title: item.taskName,
-                        trailing: normalizedWeekdayRange(item.weekdayRange)
+                        trailing: normalizedWeekdayRange(item.weekdayRange),
+                        isDone: item.done,
+                        isLoading: appState.isCompleting(kind: .notionWeek, id: item.id),
+                        onComplete: item.id.isEmpty ? nil : {
+                            appState.setItemCompleted(kind: .notionWeek, id: item.id, value: !item.done)
+                        }
                     )
                 }
             } else {
@@ -130,18 +180,27 @@ struct WeekSectionView: View {
 }
 
 struct ReminderSectionView: View {
+    @EnvironmentObject private var appState: OverlayAppState
     let section: ReminderSection?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("待办提醒事项")
+            Text("待办事项")
                 .font(.headline)
             Text(section.map { "未完成 \($0.pendingCount) 条" } ?? "暂无数据")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             if let section, !section.items.isEmpty {
                 ForEach(section.items) { item in
-                    RowView(leading: "⬜", title: item.name, trailing: nil)
+                    RowView(
+                        title: item.name,
+                        trailing: nil,
+                        isDone: item.completed,
+                        isLoading: appState.isCompleting(kind: .appleReminder, id: item.id),
+                        onComplete: item.id.isEmpty ? nil : {
+                            appState.setItemCompleted(kind: .appleReminder, id: item.id, value: !item.completed)
+                        }
+                    )
                 }
             } else {
                 EmptyStateRow(text: "暂无提醒事项")
@@ -152,21 +211,43 @@ struct ReminderSectionView: View {
 }
 
 struct RowView: View {
-    let leading: String
     let title: String
     let trailing: String?
+    let isDone: Bool
+    let isLoading: Bool
+    let onComplete: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Text(leading)
             Text(title)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let trailing, !trailing.isEmpty {
                 Text(trailing)
                     .foregroundStyle(.secondary)
             }
+            completionButton
         }
         .font(.system(size: 14))
+    }
+
+    @ViewBuilder
+    private var completionButton: some View {
+        if isLoading {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 18, height: 18)
+                .padding(.trailing, 2)
+        } else {
+            Button(action: { onComplete?() }) {
+                Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isDone ? Color.green : Color.white.opacity(0.9))
+                    .frame(width: 18, height: 18)
+                    .padding(.trailing, 2)
+            }
+            .buttonStyle(.plain)
+            .disabled(onComplete == nil)
+        }
     }
 }
 
@@ -281,12 +362,19 @@ struct SettingsView: View {
                         set: { appState.updateDingtalkEnabled($0) }
                     )
                 )
+                Toggle(
+                    "获取待办事项",
+                    isOn: Binding(
+                        get: { settings.remindersEnabled },
+                        set: { appState.updateRemindersEnabled($0) }
+                    )
+                )
                 Toggle("登录后自启动", isOn: $settings.launchAtLogin)
                 Toggle("启动时自动显示窗口", isOn: $settings.showOnLaunch)
                 Toggle("记住窗口位置与尺寸", isOn: $settings.rememberWindowFrame)
                 Toggle("在所有桌面置顶显示", isOn: $settings.showOnAllSpaces)
                 Toggle("全屏兼容增强模式", isOn: $settings.fullScreenEnhanced)
-                Stepper(value: $settings.refreshInterval, in: 10...600, step: 10) {
+                Stepper(value: $settings.refreshInterval, in: 300...1800, step: 60) {
                     Text("自动刷新间隔：\(Int(settings.refreshInterval)) 秒")
                 }
             }
